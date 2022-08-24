@@ -76,3 +76,10 @@ int fork() {
 void yield() {
   do_user_call(SYS_user_yield, 0, 0, 0, 0, 0, 0, 0);
 }
+
+//
+// show physical address
+//
+void *showpa(void *va) {
+  return (void *)do_user_call(SYS_user_showpa, (uint64)va, 0, 0, 0, 0, 0, 0);
+}
