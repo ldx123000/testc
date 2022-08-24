@@ -1,0 +1,179 @@
+diff --git a/LICENSE.txt b/LICENSE.txt
+index ffe4849..080f31f 100644
+--- a/LICENSE.txt
++++ b/LICENSE.txt
+@@ -4,8 +4,7 @@ Copyright License
+ The PKE software is:
+ 
+ Copyright (c) 2021, Zhiyuan Shao (zyshao@hust.edu.cn), 
+-                    Yi Gui (gy163email@163.com), 
+-                    Yan Jiao (773709579@qq.com),
++                    Dongxu Liu (771484893@qq.com),
+                    Huazhong University of Science and Technology
+ 
+ Permission is hereby granted, free of charge, to any person obtaining
+diff --git a/Makefile b/Makefile
+index 2dde5bf..f105e90 100644
+--- a/Makefile
++++ b/Makefile
+@@ -70,7 +70,7 @@ USER_OBJS  		:= $(addprefix $(OBJ_DIR)/, $(patsubst %.c,%.o,$(USER_CPPS)))
+ 
+ 
+ 
+-USER_TARGET 	:= $(OBJ_DIR)/app_two_long_loops
++USER_TARGET 	:= $(OBJ_DIR)/app_copy_on_write
+ #------------------------targets------------------------
+ $(OBJ_DIR):
+ 	@-mkdir -p $(OBJ_DIR)	
+diff --git a/kernel/syscall.c b/kernel/syscall.c
+index 981a86d..4f94456 100644
+--- a/kernel/syscall.c
++++ b/kernel/syscall.c
+@@ -81,6 +81,15 @@ ssize_t sys_user_yield() {
+   return 0;
+ }
+ 
++//
++// show physical address
++//
++uint64 sys_user_showpa(uint64 va) {
++  assert(current);
++  uint64 pa = (uint64)user_va_to_pa((pagetable_t)(current->pagetable), (void *)va);
++  return pa;
++}
++
+ //
+ // [a0]: the syscall number; [a1] ... [a7]: arguments to the syscalls.
+ // returns the code of success, (e.g., 0 means success, fail for otherwise)
+@@ -100,6 +109,8 @@ long do_syscall(long a0, long a1, long a2, long a3, long a4, long a5, long a6, l
+       return sys_user_fork();
+     case SYS_user_yield:
+       return sys_user_yield();
++    case SYS_user_showpa:
++      return sys_user_showpa(a1);
+     default:
+       panic("Unknown syscall %ld \n", a0);
+   }
+diff --git a/kernel/syscall.h b/kernel/syscall.h
+index e0a1a16..223dc19 100644
+--- a/kernel/syscall.h
++++ b/kernel/syscall.h
+@@ -14,6 +14,8 @@
+ // added @lab3_1
+ #define SYS_user_fork (SYS_user_base + 4)
+ #define SYS_user_yield (SYS_user_base + 5)
++// added @lab3_chllenge5
++#define SYS_user_showpa (SYS_user_base + 6)
+ 
+ long do_syscall(long a0, long a1, long a2, long a3, long a4, long a5, long a6, long a7);
+ 
+diff --git a/user/app_copy_on_write.c b/user/app_copy_on_write.c
+new file mode 100644
+index 0000000..afe5815
+--- /dev/null
++++ b/user/app_copy_on_write.c
+@@ -0,0 +1,44 @@
++/*
++ * The application of lab3_challenge5_CopyOnWrite.
++ * three processes will share the same data segment until some value changes.
++ */
++
++#include "user/user_lib.h"
++#include "util/types.h"
++
++int a[1000];
++
++int main(void) {
++  a[10] = 100;
++  int pid = fork();
++  if (pid == 0) {
++    pid = fork();
++    if (pid == 0) {
++      printu("Process2's va: 0x%x \n", a);
++      printu("Process2's pa: 0x%x \n", showpa((void *)a));
++      printu("Process2's val: %d\n", a[10]);
++      a[10] = 2;
++      printu("Process2's va: 0x%x \n", a);
++      printu("Process2's pa: 0x%x \n", showpa((void *)a));
++      printu("Process2's val: %d\n", a[10]);
++    } else {
++      printu("Process1's va: 0x%x \n", a);
++      printu("Process1's pa: 0x%x \n", showpa((void *)a));
++      printu("Process1's val: %d\n", a[10]);
++      a[10] = 1;
++      printu("Process1's va: 0x%x \n", a);
++      printu("Process1's pa: 0x%x \n", showpa((void *)a));
++      printu("Process1's val: %d\n", a[10]);
++    }
++  } else {
++    printu("Process0's va: 0x%x \n", a);
++    printu("Process0's pa: 0x%x \n", showpa((void *)a));
++    printu("Process0's val: %d\n", a[10]);
++    a[10] = 0;
++    printu("Process0's va: 0x%x \n", a);
++    printu("Process0's pa: 0x%x \n", showpa((void *)a));
++    printu("Process0's val: %d\n", a[10]);
++  }
++  exit(0);
++  return 0;
++}
+diff --git a/user/app_two_long_loops.c b/user/app_two_long_loops.c
+deleted file mode 100644
+index 2568485..0000000
+--- a/user/app_two_long_loops.c
++++ /dev/null
+@@ -1,28 +0,0 @@
+-/*
+- * The application of lab3_3.
+- * parent and child processes never give up their processor during execution.
+- */
+-
+-#include "user/user_lib.h"
+-#include "util/types.h"
+-
+-int main(void) {
+-  uint64 pid = fork();
+-  uint64 rounds = 100000000;
+-  uint64 interval = 10000000;
+-  uint64 a = 0;
+-  if (pid == 0) {
+-    printu("Child: Hello world! \n");
+-    for (uint64 i = 0; i < rounds; ++i) {
+-      if (i % interval == 0) printu("Child running %ld \n", i);
+-    }
+-  } else {
+-    printu("Parent: Hello world! \n");
+-    for (uint64 i = 0; i < rounds; ++i) {
+-      if (i % interval == 0) printu("Parent running %ld \n", i);
+-    }
+-  }
+-
+-  exit(0);
+-  return 0;
+-}
+diff --git a/user/user_lib.c b/user/user_lib.c
+index 3fcb85d..d299c80 100644
+--- a/user/user_lib.c
++++ b/user/user_lib.c
+@@ -76,3 +76,10 @@ int fork() {
+ void yield() {
+   do_user_call(SYS_user_yield, 0, 0, 0, 0, 0, 0, 0);
+ }
++
++//
++// show physical address
++//
++void *showpa(void *va) {
++  return (void *)do_user_call(SYS_user_showpa, (uint64)va, 0, 0, 0, 0, 0, 0);
++}
+\ No newline at end of file
+diff --git a/user/user_lib.h b/user/user_lib.h
+index 63e2e25..d0c06b3 100644
+--- a/user/user_lib.h
++++ b/user/user_lib.h
+@@ -8,3 +8,4 @@ void* naive_malloc();
+ void naive_free(void* va);
+ int fork();
+ void yield();
++void* showpa(void* va);
+\ No newline at end of file

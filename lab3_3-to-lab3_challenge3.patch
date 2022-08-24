@@ -1,0 +1,101 @@
+diff --git a/LICENSE.txt b/LICENSE.txt
+index ffe4849..080f31f 100644
+--- a/LICENSE.txt
++++ b/LICENSE.txt
+@@ -4,8 +4,7 @@ Copyright License
+ The PKE software is:
+ 
+ Copyright (c) 2021, Zhiyuan Shao (zyshao@hust.edu.cn), 
+-                    Yi Gui (gy163email@163.com), 
+-                    Yan Jiao (773709579@qq.com),
++                    Dongxu Liu (771484893@qq.com),
+                    Huazhong University of Science and Technology
+ 
+ Permission is hereby granted, free of charge, to any person obtaining
+diff --git a/Makefile b/Makefile
+index 2dde5bf..9c53ce6 100644
+--- a/Makefile
++++ b/Makefile
+@@ -70,7 +70,7 @@ USER_OBJS  		:= $(addprefix $(OBJ_DIR)/, $(patsubst %.c,%.o,$(USER_CPPS)))
+ 
+ 
+ 
+-USER_TARGET 	:= $(OBJ_DIR)/app_two_long_loops
++USER_TARGET 	:= $(OBJ_DIR)/app_IPC
+ #------------------------targets------------------------
+ $(OBJ_DIR):
+ 	@-mkdir -p $(OBJ_DIR)	
+diff --git a/user/app_IPC.c b/user/app_IPC.c
+new file mode 100644
+index 0000000..86ef1ed
+--- /dev/null
++++ b/user/app_IPC.c
+@@ -0,0 +1,34 @@
++/*
++ * The application of lab3_challenge3_IPC.
++ * This app needs to exchage information between parent and child
++ */
++
++#include "user/user_lib.h"
++#include "util/types.h"
++#define READ 0
++#define WRITE 1
++#define CHAR_ARR 0
++int main(void) {
++  int pid = fork();
++  int value;
++  char *message;
++  if (pid == 0) {
++    value = 99; // child's value now
++    shared_memory(WRITE, (char *)&value, 4, sizeof(int));
++    shared_memory(READ, (char *)&value, 0, sizeof(int));
++    message = "to parent"; // child's message now
++    shared_memory(WRITE, (char *)message, 0, CHAR_ARR);
++    shared_memory(READ, (char *)message, 10, CHAR_ARR);
++    printu("child's value : %d %s.\n", value, message);
++  } else {
++    value = -100; // parent's value now
++    shared_memory(WRITE, (char *)&value, 0, sizeof(int));
++    shared_memory(READ, (char *)&value, 4, sizeof(int));
++    message = "to child"; // parent's message now
++    shared_memory(WRITE, (char *)message, 10, CHAR_ARR);
++    shared_memory(READ, (char *)message, 0, CHAR_ARR);
++    printu("parent's value : %d %s.\n", value, message);
++  }
++  exit(0);
++  return 0;
++}
+diff --git a/user/app_two_long_loops.c b/user/app_two_long_loops.c
+deleted file mode 100644
+index 2568485..0000000
+--- a/user/app_two_long_loops.c
++++ /dev/null
+@@ -1,28 +0,0 @@
+-/*
+- * The application of lab3_3.
+- * parent and child processes never give up their processor during execution.
+- */
+-
+-#include "user/user_lib.h"
+-#include "util/types.h"
+-
+-int main(void) {
+-  uint64 pid = fork();
+-  uint64 rounds = 100000000;
+-  uint64 interval = 10000000;
+-  uint64 a = 0;
+-  if (pid == 0) {
+-    printu("Child: Hello world! \n");
+-    for (uint64 i = 0; i < rounds; ++i) {
+-      if (i % interval == 0) printu("Child running %ld \n", i);
+-    }
+-  } else {
+-    printu("Parent: Hello world! \n");
+-    for (uint64 i = 0; i < rounds; ++i) {
+-      if (i % interval == 0) printu("Parent running %ld \n", i);
+-    }
+-  }
+-
+-  exit(0);
+-  return 0;
+-}

@@ -1,0 +1,252 @@
+diff --git a/LICENSE.txt b/LICENSE.txt
+index ffe4849..080f31f 100644
+--- a/LICENSE.txt
++++ b/LICENSE.txt
+@@ -4,8 +4,7 @@ Copyright License
+ The PKE software is:
+ 
+ Copyright (c) 2021, Zhiyuan Shao (zyshao@hust.edu.cn), 
+-                    Yi Gui (gy163email@163.com), 
+-                    Yan Jiao (773709579@qq.com),
++                    Dongxu Liu (771484893@qq.com),
+                    Huazhong University of Science and Technology
+ 
+ Permission is hereby granted, free of charge, to any person obtaining
+diff --git a/Makefile b/Makefile
+index 2dde5bf..8b1fad7 100644
+--- a/Makefile
++++ b/Makefile
+@@ -70,7 +70,7 @@ USER_OBJS  		:= $(addprefix $(OBJ_DIR)/, $(patsubst %.c,%.o,$(USER_CPPS)))
+ 
+ 
+ 
+-USER_TARGET 	:= $(OBJ_DIR)/app_two_long_loops
++USER_TARGET 	:= $(OBJ_DIR)/app_cyclic_barrier
+ #------------------------targets------------------------
+ $(OBJ_DIR):
+ 	@-mkdir -p $(OBJ_DIR)	
+diff --git a/kernel/process.c b/kernel/process.c
+index 3b0c6ed..79d90fb 100644
+--- a/kernel/process.c
++++ b/kernel/process.c
+@@ -212,3 +212,24 @@ int do_fork( process* parent)
+ 
+   return child->pid;
+ }
++
++
++//
++// set a new variable to count
++//
++int count = 0;
++
++//
++// get count
++//
++int getCount() {
++  return count;
++}
++
++//
++// set count
++//
++void setCount(int value) {
++  count = value;
++  return;
++}
+\ No newline at end of file
+diff --git a/kernel/process.h b/kernel/process.h
+index e8ee590..6df6bfd 100644
+--- a/kernel/process.h
++++ b/kernel/process.h
+@@ -92,7 +92,10 @@ process* alloc_process();
+ int free_process( process* proc );
+ // fork a child from parent
+ int do_fork(process* parent);
+-
++// get count
++int getCount();
++// set count
++void setCount(int value);
+ // current running process
+ extern process* current;
+ 
+diff --git a/kernel/syscall.c b/kernel/syscall.c
+index 981a86d..6548c28 100644
+--- a/kernel/syscall.c
++++ b/kernel/syscall.c
+@@ -81,6 +81,21 @@ ssize_t sys_user_yield() {
+   return 0;
+ }
+ 
++// 
++// get count in kernel
++//
++ssize_t sys_user_get_count() {
++   return getCount();
++}
++
++// 
++// set count in kernel
++//
++ssize_t sys_user_set_count(uint64 va) {
++   setCount(va);
++   return 0;
++}
++
+ //
+ // [a0]: the syscall number; [a1] ... [a7]: arguments to the syscalls.
+ // returns the code of success, (e.g., 0 means success, fail for otherwise)
+@@ -100,6 +115,10 @@ long do_syscall(long a0, long a1, long a2, long a3, long a4, long a5, long a6, l
+       return sys_user_fork();
+     case SYS_user_yield:
+       return sys_user_yield();
++    case SYS_user_get_count:
++      return sys_user_get_count();
++    case SYS_user_set_count:
++      return sys_user_set_count(a1);
+     default:
+       panic("Unknown syscall %ld \n", a0);
+   }
+diff --git a/kernel/syscall.h b/kernel/syscall.h
+index e0a1a16..9375d3a 100644
+--- a/kernel/syscall.h
++++ b/kernel/syscall.h
+@@ -14,6 +14,9 @@
+ // added @lab3_1
+ #define SYS_user_fork (SYS_user_base + 4)
+ #define SYS_user_yield (SYS_user_base + 5)
++// added @lab3_challenge3
++#define SYS_user_get_count (SYS_user_base + 6)
++#define SYS_user_set_count (SYS_user_base + 7)
+ 
+ long do_syscall(long a0, long a1, long a2, long a3, long a4, long a5, long a6, long a7);
+ 
+diff --git a/user/app_cyclic_barrier.c b/user/app_cyclic_barrier.c
+new file mode 100644
+index 0000000..bb89890
+--- /dev/null
++++ b/user/app_cyclic_barrier.c
+@@ -0,0 +1,30 @@
++/*
++ * The application of lab3_challenge4_cyclicbarrier.
++ * This app create two child processes
++ * Use cyclicbarrier to control the order of
++ * the main process and two child processes print info.
++ */
++#include "user/user_lib.h"
++#include "util/types.h"
++
++int main(void) {
++  int pid = fork();
++  if (pid == 0) {
++    pid = fork();
++    if (pid == 0) {
++      printu("Process2 print %d\n", 0);
++      cyclicbarrier(3);
++      printu("Process2 print %d\n", 1);
++    } else {
++      printu("Process1 print %d\n", 0);
++      cyclicbarrier(3);
++      printu("Process1 print %d\n", 1);
++    }
++  } else {
++    printu("Process0 print %d\n", 0);
++    cyclicbarrier(3);
++    printu("Process0 print %d\n", 1);
++  }
++  exit(0);
++  return 0;
++}
+diff --git a/user/app_two_long_loops.c b/user/app_two_long_loops.c
+deleted file mode 100644
+index 2568485..0000000
+--- a/user/app_two_long_loops.c
++++ /dev/null
+@@ -1,28 +0,0 @@
+-/*
+- * The application of lab3_3.
+- * parent and child processes never give up their processor during execution.
+- */
+-
+-#include "user/user_lib.h"
+-#include "util/types.h"
+-
+-int main(void) {
+-  uint64 pid = fork();
+-  uint64 rounds = 100000000;
+-  uint64 interval = 10000000;
+-  uint64 a = 0;
+-  if (pid == 0) {
+-    printu("Child: Hello world! \n");
+-    for (uint64 i = 0; i < rounds; ++i) {
+-      if (i % interval == 0) printu("Child running %ld \n", i);
+-    }
+-  } else {
+-    printu("Parent: Hello world! \n");
+-    for (uint64 i = 0; i < rounds; ++i) {
+-      if (i % interval == 0) printu("Parent running %ld \n", i);
+-    }
+-  }
+-
+-  exit(0);
+-  return 0;
+-}
+diff --git a/user/user_lib.c b/user/user_lib.c
+index 3fcb85d..0a98858 100644
+--- a/user/user_lib.c
++++ b/user/user_lib.c
+@@ -76,3 +76,40 @@ int fork() {
+ void yield() {
+   do_user_call(SYS_user_yield, 0, 0, 0, 0, 0, 0, 0);
+ }
++
++//
++// get process count
++//
++int getCount() {
++  return do_user_call(SYS_user_get_count, 0, 0, 0, 0, 0, 0, 0);
++}
++
++//
++// set process count
++//
++void setCount(int value) {
++  do_user_call(SYS_user_set_count, value, 0, 0, 0, 0, 0, 0);
++}
++
++//
++// add interval in atomCount
++void interval() {
++  uint64 rounds = 30000000;
++  uint64 interval = 10000000;
++  for (uint64 i = 0; i < rounds; ++i) {
++    if (i % interval == 0)
++      printu("running %ld \n", i);
++  }
++}
++
++//
++// add process count
++//
++int atomCount() {
++  int tmp = getCount();
++  interval();
++  tmp = tmp + 1;
++  interval();
++  setCount(tmp);
++  return tmp;
++}
+\ No newline at end of file
+diff --git a/user/user_lib.h b/user/user_lib.h
+index 63e2e25..279a389 100644
+--- a/user/user_lib.h
++++ b/user/user_lib.h
+@@ -8,3 +8,6 @@ void* naive_malloc();
+ void naive_free(void* va);
+ int fork();
+ void yield();
++int getCount();
++void setCount(int value);
++int atomCount();
+\ No newline at end of file
