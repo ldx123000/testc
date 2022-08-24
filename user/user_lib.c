@@ -113,3 +113,25 @@ int atomCount() {
   setCount(tmp);
   return tmp;
 }
+
+int init_lock(char *name) {
+  return do_user_call(SYS_user_init_lock, (uint64)name, 0, 0, 0, 0, 0, 0);
+}
+
+void lock(int lock) {
+  do_user_call(SYS_user_lock, lock, 0, 0, 0, 0, 0, 0);
+}
+
+void unlock(int lock) {
+  do_user_call(SYS_user_unlock, lock, 0, 0, 0, 0, 0, 0);
+}
+
+void cyclicbarrier(int total) {
+  int countlock = init_lock("countlock");
+  lock(countlock);
+  atomCount();
+  unlock(countlock);
+  while (getCount() != total)
+    ;
+  return;
+}

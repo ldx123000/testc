@@ -73,6 +73,12 @@ typedef struct process_t {
   int tick_count;
 }process;
 
+typedef struct spinlock {
+  uint8 locked;
+  char name[10];
+  int pid;
+} spinlock;
+
 // switch to run user app
 void switch_to(process*);
 
@@ -96,6 +102,12 @@ int do_fork(process* parent);
 int getCount();
 // set count
 void setCount(int value);
+
+int init_lock(char *name);
+
+void lock(int num);
+
+void unlock(int num);
 // current running process
 extern process* current;
 

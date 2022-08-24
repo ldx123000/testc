@@ -98,6 +98,22 @@ ssize_t sys_user_set_count(uint64 va) {
    return 0;
 }
 
+uint64 sys_user_init_lock(char *name) {
+  char* pa = (char*)user_va_to_pa((pagetable_t)(current->pagetable), (void*)name);
+  return init_lock(pa);
+}
+
+
+ssize_t sys_user_lock(int sl) {
+  lock(sl);
+  return 0;
+}
+
+ssize_t sys_user_unlock(int sl) {
+  unlock(sl);
+  return 0;
+}
+
 //
 // [a0]: the syscall number; [a1] ... [a7]: arguments to the syscalls.
 // returns the code of success, (e.g., 0 means success, fail for otherwise)
@@ -121,6 +137,12 @@ long do_syscall(long a0, long a1, long a2, long a3, long a4, long a5, long a6, l
       return sys_user_get_count();
     case SYS_user_set_count:
       return sys_user_set_count(a1);
+    case SYS_user_init_lock:
+      return sys_user_init_lock((char*)a1);
+    case SYS_user_lock:
+      return sys_user_lock(a1);
+    case SYS_user_unlock:
+      return sys_user_unlock(a1);
     default:
       panic("Unknown syscall %ld \n", a0);
   }

@@ -11,3 +11,7 @@ void yield();
 int getCount();
 void setCount(int value);
 int atomCount();
+int init_lock(char *name);
+void lock(int lock);
+void unlock(int lock);
+void cyclicbarrier(int total);

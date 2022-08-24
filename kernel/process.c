@@ -241,3 +241,39 @@ void setCount(int value) {
   count = value;
   return;
 }
+
+spinlock slock[10];
+
+int init_lock(char *name) {
+  for (int i = 0; i < 10; i++) {   
+    if (strlen(slock[i].name) == 0) { // inital   
+      slock[i].locked = 0;
+      strcpy(slock[i].name,name);
+      slock[i].pid = -1;
+      return i;
+    } else if (strcmp(slock[i].name, name) == 0) { // already exist
+      return i;
+    }
+  }
+  return -1;
+}
+
+extern int preempt_flag;
+
+void lock(int num) {
+  spinlock *lock=&slock[num];
+  while (lock->locked == 1) {
+
+  }
+  lock->locked = 1;
+  lock->pid = current->pid;
+  preempt_flag = 0;
+}
+
+void unlock(int num) {
+  spinlock *lock=&slock[num];
+  assert(lock->pid == current->pid);
+  lock->locked = 0;
+  lock->pid = -1;
+  preempt_flag = 1;
+}
