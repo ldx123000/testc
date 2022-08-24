@@ -220,3 +220,24 @@ int do_fork( process* parent)
 
   return child->pid;
 }
+
+
+//
+// set a new variable to count
+//
+int count = 0;
+
+//
+// get count
+//
+int getCount() {
+  return count;
+}
+
+//
+// set count
+//
+void setCount(int value) {
+  count = value;
+  return;
+}

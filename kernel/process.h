@@ -92,7 +92,10 @@ process* alloc_process();
 int free_process( process* proc );
 // fork a child from parent
 int do_fork(process* parent);
-
+// get count
+int getCount();
+// set count
+void setCount(int value);
 // current running process
 extern process* current;
 

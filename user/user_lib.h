@@ -8,3 +8,6 @@ void* naive_malloc();
 void naive_free(void* va);
 int fork();
 void yield();
+int getCount();
+void setCount(int value);
+int atomCount();

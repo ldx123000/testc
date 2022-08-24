@@ -76,3 +76,40 @@ int fork() {
 void yield() {
   do_user_call(SYS_user_yield, 0, 0, 0, 0, 0, 0, 0);
 }
+
+//
+// get process count
+//
+int getCount() {
+  return do_user_call(SYS_user_get_count, 0, 0, 0, 0, 0, 0, 0);
+}
+
+//
+// set process count
+//
+void setCount(int value) {
+  do_user_call(SYS_user_set_count, value, 0, 0, 0, 0, 0, 0);
+}
+
+//
+// add interval in atomCount
+void interval() {
+  uint64 rounds = 30000000;
+  uint64 interval = 10000000;
+  for (uint64 i = 0; i < rounds; ++i) {
+    if (i % interval == 0)
+      printu("running %ld \n", i);
+  }
+}
+
+//
+// add process count
+//
+int atomCount() {
+  int tmp = getCount();
+  interval();
+  tmp = tmp + 1;
+  interval();
+  setCount(tmp);
+  return tmp;
+}
