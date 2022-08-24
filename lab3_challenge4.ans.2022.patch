@@ -1,0 +1,215 @@
+From 26880656f4b09304044b49f56b0331f59d32db01 Mon Sep 17 00:00:00 2001
+From: ldx123000 <771484893@qq.com>
+Date: Wed, 24 Aug 2022 13:49:15 +0000
+Subject: [PATCH] finish lab3_chellenge4
+
+---
+ kernel/process.c | 36 ++++++++++++++++++++++++++++++++++++
+ kernel/process.h | 12 ++++++++++++
+ kernel/strap.c   |  3 ++-
+ kernel/syscall.c | 22 ++++++++++++++++++++++
+ kernel/syscall.h |  3 +++
+ user/user_lib.c  | 22 ++++++++++++++++++++++
+ user/user_lib.h  |  6 +++++-
+ 7 files changed, 102 insertions(+), 2 deletions(-)
+
+diff --git a/kernel/process.c b/kernel/process.c
+index e5768b3..7d5f698 100644
+--- a/kernel/process.c
++++ b/kernel/process.c
+@@ -240,4 +240,40 @@ int getCount() {
+ void setCount(int value) {
+   count = value;
+   return;
++}
++
++spinlock slock[10];
++
++int init_lock(char *name) {
++  for (int i = 0; i < 10; i++) {   
++    if (strlen(slock[i].name) == 0) { // inital   
++      slock[i].locked = 0;
++      strcpy(slock[i].name,name);
++      slock[i].pid = -1;
++      return i;
++    } else if (strcmp(slock[i].name, name) == 0) { // already exist
++      return i;
++    }
++  }
++  return -1;
++}
++
++extern int preempt_flag;
++
++void lock(int num) {
++  spinlock *lock=&slock[num];
++  while (lock->locked == 1) {
++
++  }
++  lock->locked = 1;
++  lock->pid = current->pid;
++  preempt_flag = 0;
++}
++
++void unlock(int num) {
++  spinlock *lock=&slock[num];
++  assert(lock->pid == current->pid);
++  lock->locked = 0;
++  lock->pid = -1;
++  preempt_flag = 1;
+ }
+\ No newline at end of file
+diff --git a/kernel/process.h b/kernel/process.h
+index 6df6bfd..c7d8054 100644
+--- a/kernel/process.h
++++ b/kernel/process.h
+@@ -73,6 +73,12 @@ typedef struct process_t {
+   int tick_count;
+ }process;
+ 
++typedef struct spinlock {
++  uint8 locked;
++  char name[10];
++  int pid;
++} spinlock;
++
+ // switch to run user app
+ void switch_to(process*);
+ 
+@@ -96,6 +102,12 @@ int do_fork(process* parent);
+ int getCount();
+ // set count
+ void setCount(int value);
++
++int init_lock(char *name);
++
++void lock(int num);
++
++void unlock(int num);
+ // current running process
+ extern process* current;
+ 
+diff --git a/kernel/strap.c b/kernel/strap.c
+index 2f7d4ce..cd05703 100644
+--- a/kernel/strap.c
++++ b/kernel/strap.c
+@@ -76,12 +76,13 @@ void handle_user_page_fault(uint64 mcause, uint64 sepc, uint64 stval) {
+ //
+ // implements round-robin scheduling. added @lab3_3
+ //
++int preempt_flag=1;
+ void rrsched() {
+   // TODO (lab3_3): implements round-robin scheduling.
+   // hint: increase the tick_count member of current process by one, if it is bigger than
+   // TIME_SLICE_LEN (means it has consumed its time slice), change its status into READY,
+   // place it in the rear of ready queue, and finally schedule next process to run.
+-  if( current->tick_count + 1 >= TIME_SLICE_LEN ){
++  if( current->tick_count + 1 >= TIME_SLICE_LEN && preempt_flag){
+     current->tick_count = 0;
+     current->status = READY;
+     insert_to_ready_queue( current );
+diff --git a/kernel/syscall.c b/kernel/syscall.c
+index 4cb3696..ad21ae9 100644
+--- a/kernel/syscall.c
++++ b/kernel/syscall.c
+@@ -98,6 +98,22 @@ ssize_t sys_user_set_count(uint64 va) {
+    return 0;
+ }
+ 
++uint64 sys_user_init_lock(char *name) {
++  char* pa = (char*)user_va_to_pa((pagetable_t)(current->pagetable), (void*)name);
++  return init_lock(pa);
++}
++
++
++ssize_t sys_user_lock(int sl) {
++  lock(sl);
++  return 0;
++}
++
++ssize_t sys_user_unlock(int sl) {
++  unlock(sl);
++  return 0;
++}
++
+ //
+ // [a0]: the syscall number; [a1] ... [a7]: arguments to the syscalls.
+ // returns the code of success, (e.g., 0 means success, fail for otherwise)
+@@ -121,6 +137,12 @@ long do_syscall(long a0, long a1, long a2, long a3, long a4, long a5, long a6, l
+       return sys_user_get_count();
+     case SYS_user_set_count:
+       return sys_user_set_count(a1);
++    case SYS_user_init_lock:
++      return sys_user_init_lock((char*)a1);
++    case SYS_user_lock:
++      return sys_user_lock(a1);
++    case SYS_user_unlock:
++      return sys_user_unlock(a1);
+     default:
+       panic("Unknown syscall %ld \n", a0);
+   }
+diff --git a/kernel/syscall.h b/kernel/syscall.h
+index 9375d3a..1aa2e86 100644
+--- a/kernel/syscall.h
++++ b/kernel/syscall.h
+@@ -17,6 +17,9 @@
+ // added @lab3_challenge3
+ #define SYS_user_get_count (SYS_user_base + 6)
+ #define SYS_user_set_count (SYS_user_base + 7)
++#define SYS_user_init_lock (SYS_user_base + 8)
++#define SYS_user_lock (SYS_user_base + 9)
++#define SYS_user_unlock (SYS_user_base + 10)
+ 
+ long do_syscall(long a0, long a1, long a2, long a3, long a4, long a5, long a6, long a7);
+ 
+diff --git a/user/user_lib.c b/user/user_lib.c
+index 0a98858..6332db2 100644
+--- a/user/user_lib.c
++++ b/user/user_lib.c
+@@ -112,4 +112,26 @@ int atomCount() {
+   interval();
+   setCount(tmp);
+   return tmp;
++}
++
++int init_lock(char *name) {
++  return do_user_call(SYS_user_init_lock, (uint64)name, 0, 0, 0, 0, 0, 0);
++}
++
++void lock(int lock) {
++  do_user_call(SYS_user_lock, lock, 0, 0, 0, 0, 0, 0);
++}
++
++void unlock(int lock) {
++  do_user_call(SYS_user_unlock, lock, 0, 0, 0, 0, 0, 0);
++}
++
++void cyclicbarrier(int total) {
++  int countlock = init_lock("countlock");
++  lock(countlock);
++  atomCount();
++  unlock(countlock);
++  while (getCount() != total)
++    ;
++  return;
+ }
+\ No newline at end of file
+diff --git a/user/user_lib.h b/user/user_lib.h
+index 279a389..cb70d41 100644
+--- a/user/user_lib.h
++++ b/user/user_lib.h
+@@ -10,4 +10,8 @@ int fork();
+ void yield();
+ int getCount();
+ void setCount(int value);
+-int atomCount();
+\ No newline at end of file
++int atomCount();
++int init_lock(char *name);
++void lock(int lock);
++void unlock(int lock);
++void cyclicbarrier(int total);
+\ No newline at end of file
+-- 
+2.30.2
+
