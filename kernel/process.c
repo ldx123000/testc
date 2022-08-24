@@ -167,6 +167,7 @@ int free_process( process* proc ) {
 // segments (code, system) of the parent to child. the stack segment remains unchanged
 // for the child.
 //
+ref_pa data_pa[10];
 int do_fork( process* parent)
 {
   sprint( "will fork a child from parent %d.\n", parent->pid );
@@ -208,6 +209,28 @@ int do_fork( process* parent)
         child->mapped_info[child->total_mapped_region].npages =
           parent->mapped_info[i].npages;
         child->mapped_info[child->total_mapped_region].seg_type = CODE_SEGMENT;
+        child->total_mapped_region++;
+        break;
+      case DATA_SEGMENT:
+        child->mapped_info[i].va = parent->mapped_info[i].va;
+        for (int j = 0; j < parent->mapped_info[i].npages; j++) {
+          uint64 va = parent->mapped_info[i].va + PGSIZE * j;
+          void *pa = (void *)lookup_pa(parent->pagetable, va);
+          for (int i = 0; i < 10; i++) {
+            if (data_pa[i].pa == NULL) {
+              data_pa[i].pa = pa;
+              data_pa[i].ref = 2;
+            } else if (data_pa[i].pa == pa)
+              data_pa[i].ref++;
+          }
+          user_vm_unmap((pagetable_t)parent->pagetable, va, PGSIZE, 0);
+          user_vm_map((pagetable_t)parent->pagetable, va, PGSIZE, (uint64)pa, prot_to_type(PROT_READ, 1));
+          user_vm_map((pagetable_t)child->pagetable, va, PGSIZE, (uint64)pa, prot_to_type(PROT_READ, 1));
+        }
+        child->mapped_info[child->total_mapped_region].va = parent->mapped_info[i].va;
+        child->mapped_info[child->total_mapped_region].npages =
+            parent->mapped_info[i].npages;
+        child->mapped_info[child->total_mapped_region].seg_type = DATA_SEGMENT;
         child->total_mapped_region++;
         break;
     }

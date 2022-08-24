@@ -73,6 +73,12 @@ typedef struct process_t {
   int tick_count;
 }process;
 
+//pa refrence
+typedef struct ref_pa{
+  void* pa;
+  int ref;
+}ref_pa;
+
 // switch to run user app
 void switch_to(process*);
 
